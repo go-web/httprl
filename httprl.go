@@ -3,6 +3,7 @@ package httprl
 
 import (
 	"errors"
+	"log"
 	"net"
 	"net/http"
 	"strconv"
@@ -12,7 +13,6 @@ import (
 var (
 	ErrLimitExceeded      = errors.New("Rate limit exceeded")
 	ErrServiceUnavailable = errors.New("Service unavailable, try again later")
-	ErrKeyNotFound        = errors.New("Rate limiter key not found")
 )
 
 // A KeyMaker makes keys from the http.Request object to the RateLimiter.
@@ -41,11 +41,12 @@ type Backend interface {
 // A RateLimiter is an http.Handler that wraps another handler,
 // and calls it up to a certain limit, per time interval.
 type RateLimiter struct {
-	Backend  Backend  // Backend for the rate limiter
-	Limit    uint64   // Maximum number of requests per interval
-	Interval int32    // Interval in seconds
-	KeyMaker KeyMaker // Function to generate a key from the request
-	Policy   Policy   // Default policy when backend fails
+	Backend  Backend     // Backend for the rate limiter
+	Limit    uint64      // Maximum number of requests per interval
+	Interval int32       // Interval in seconds
+	KeyMaker KeyMaker    // Function to generate a key from the request
+	Policy   Policy      // Default policy when backend fails
+	ErrorLog *log.Logger // Optional logger for backend errors
 }
 
 // Policy defines the rate limiter policy to apply when the backend fails.
@@ -83,6 +84,9 @@ func (rl *RateLimiter) limit(w http.ResponseWriter, r *http.Request) error {
 	k := km(r)
 	nreq, remttl, err := rl.Backend.Hit(k, rl.Interval)
 	if err != nil {
+		if rl.ErrorLog != nil {
+			rl.ErrorLog.Printf("ratelimiter: %v", err)
+		}
 		if rl.Policy == BlockPolicy {
 			return errServiceUnavailable(w)
 		}
