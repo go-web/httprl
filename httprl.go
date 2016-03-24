@@ -41,12 +41,14 @@ type Backend interface {
 // A RateLimiter is an http.Handler that wraps another handler,
 // and calls it up to a certain limit, per time interval.
 type RateLimiter struct {
-	Backend  Backend     // Backend for the rate limiter
-	Limit    uint64      // Maximum number of requests per interval
-	Interval int32       // Interval in seconds
-	KeyMaker KeyMaker    // Function to generate a key from the request
-	Policy   Policy      // Default policy when backend fails
-	ErrorLog *log.Logger // Optional logger for backend errors
+	Backend                Backend          // Backend for the rate limiter
+	Limit                  uint64           // Maximum number of requests per interval
+	Interval               int32            // Interval in seconds
+	KeyMaker               KeyMaker         // Function to generate a key from the request (DefaultKeyMaker)
+	Policy                 Policy           // Policy when backend fails (default BlockPolicy)
+	ErrorLog               *log.Logger      // Optional logger for backend errors (optional)
+	LimitExceededFunc      http.HandlerFunc // Function called when limit exceeded (optional)
+	ServiceUnavailableFunc http.HandlerFunc // Function called when backend is unavailable (optional)
 }
 
 // Policy defines the rate limiter policy to apply when the backend fails.
@@ -88,6 +90,10 @@ func (rl *RateLimiter) limit(w http.ResponseWriter, r *http.Request) error {
 			rl.ErrorLog.Printf("ratelimiter: %v", err)
 		}
 		if rl.Policy == BlockPolicy {
+			if f := rl.ServiceUnavailableFunc; f != nil {
+				f(w, r)
+				return ErrServiceUnavailable
+			}
 			return errServiceUnavailable(w)
 		}
 		return nil // Allow.
@@ -100,6 +106,10 @@ func (rl *RateLimiter) limit(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	case nreq > rl.Limit:
 		w.Header().Set("X-RateLimit-Remaining", "0")
+		if f := rl.LimitExceededFunc; f != nil {
+			f(w, r)
+			return ErrLimitExceeded
+		}
 		return errLimitExceeded(w)
 	}
 	rem := rl.Limit - nreq
