@@ -2,6 +2,7 @@
 package memcacherl
 
 import (
+	"context"
 	"time"
 
 	"github.com/bradfitz/gomemcache/memcache"
@@ -17,8 +18,19 @@ func New(mc *memcache.Client) *Client {
 	return &Client{mc}
 }
 
-// Hit implements the httprl.Backend interface.
+// Hit implements the httprl.Backend interface. It delegates to HitContext
+// with a background context.
 func (c *Client) Hit(key string, ttlsec int32) (count uint64, remttl int32, err error) {
+	return c.HitContext(context.Background(), key, ttlsec)
+}
+
+// HitContext implements the httprl.BackendContext interface. The
+// underlying gomemcache client does not accept a context, so ctx is only
+// inspected once on entry to short-circuit already-cancelled requests.
+func (c *Client) HitContext(ctx context.Context, key string, ttlsec int32) (count uint64, remttl int32, err error) {
+	if err := ctx.Err(); err != nil {
+		return 0, 0, err
+	}
 	item, err := c.mc.Get(key)
 	if err != nil {
 		if err == memcache.ErrCacheMiss {

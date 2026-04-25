@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/bradfitz/gomemcache/memcache"
-	"github.com/fiorix/go-redis/redis"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/go-web/httprl"
 	"github.com/go-web/httprl/memcacherl"
@@ -43,7 +43,7 @@ func Example_memcache() {
 }
 
 func Example_redis() {
-	rc := redis.New("localhost:6379")
+	rc := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
 	rl := &httprl.RateLimiter{
 		Backend:  redisrl.New(rc),
 		Limit:    5,

@@ -2,6 +2,7 @@
 package httprl
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net"
@@ -36,6 +37,14 @@ type Backend interface {
 	// with the given time-to-live, in seconds. Returns the
 	// hit count and remaining ttl for the given key.
 	Hit(key string, ttlsec int32) (count uint64, remttl int32, err error)
+}
+
+// BackendContext is the context-aware variant of Backend. RateLimiter
+// prefers it when the configured Backend value also satisfies this
+// interface, passing the request context through to the backend so
+// cancellations and deadlines propagate.
+type BackendContext interface {
+	HitContext(ctx context.Context, key string, ttlsec int32) (count uint64, remttl int32, err error)
 }
 
 // A RateLimiter is an http.Handler that wraps another handler,
@@ -84,7 +93,16 @@ func (rl *RateLimiter) limit(w http.ResponseWriter, r *http.Request) error {
 		km = DefaultKeyMaker
 	}
 	k := km(r)
-	nreq, remttl, err := rl.Backend.Hit(k, rl.Interval)
+	var (
+		nreq   uint64
+		remttl int32
+		err    error
+	)
+	if bc, ok := rl.Backend.(BackendContext); ok {
+		nreq, remttl, err = bc.HitContext(r.Context(), k, rl.Interval)
+	} else {
+		nreq, remttl, err = rl.Backend.Hit(k, rl.Interval)
+	}
 	if err != nil {
 		if rl.ErrorLog != nil {
 			rl.ErrorLog.Printf("ratelimiter: %v", err)
