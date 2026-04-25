@@ -1,6 +1,8 @@
 package memcacherl
 
 import (
+	"net"
+	"os"
 	"testing"
 	"time"
 
@@ -8,7 +10,16 @@ import (
 )
 
 func TestClient(t *testing.T) {
-	mc := memcache.New("localhost:11211")
+	addr := os.Getenv("MEMCACHE_ADDR")
+	if addr == "" {
+		addr = "localhost:11211"
+	}
+	conn, err := net.DialTimeout("tcp", addr, time.Second)
+	if err != nil {
+		t.Skipf("memcache not available at %s: %v", addr, err)
+	}
+	conn.Close()
+	mc := memcache.New(addr)
 	c := New(mc)
 	for i := 0; i < 3; i++ {
 		n, _, err := c.Hit("hello", 1)

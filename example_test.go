@@ -30,7 +30,7 @@ func ExampleMap() {
 	http.ListenAndServe(":8080", mux)
 }
 
-func ExampleMemcache() {
+func Example_memcache() {
 	mc := memcache.New("localhost:11211")
 	rl := &httprl.RateLimiter{
 		Backend:  memcacherl.New(mc),
@@ -42,7 +42,7 @@ func ExampleMemcache() {
 	http.ListenAndServe(":8080", mux)
 }
 
-func ExampleRedis() {
+func Example_redis() {
 	rc := redis.New("localhost:6379")
 	rl := &httprl.RateLimiter{
 		Backend:  redisrl.New(rc),
